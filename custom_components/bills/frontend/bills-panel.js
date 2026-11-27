@@ -120,14 +120,15 @@ class BillsPanel extends HTMLElement {
       : add ? { kind: "tx", id: null, type: add === "income" ? "income" : "expense" } : null;
     this._msg = "";
     this._error = "";
-    this._loaded = false;
+    this._loaded = false;  // the first load has been started
+    this._ready = false;   // ... and has finished, so this._bills can be trusted
   }
 
   set hass(hass) {
     this._hass = hass;
     if (!this._loaded) {
       this._loaded = true;
-      this._refresh(true);
+      this._refresh();
     }
   }
   set narrow(v) { this._narrow = v; }
@@ -161,7 +162,9 @@ class BillsPanel extends HTMLElement {
       this._form = { kind: "tx", id: null, type: add === "income" ? "income" : "expense" };
     } else if (pay) {
       this._tab = "bills";
-      if (this._bill(pay)) {
+      // Until the bills have loaded there's nothing to check the link
+      // against; the first load checks it instead.
+      if (!this._ready || this._bill(pay)) {
         this._msg = "";
         this._form = { kind: "pay", id: pay };
       } else {
@@ -200,7 +203,7 @@ class BillsPanel extends HTMLElement {
     return res.response;
   }
 
-  async _refresh(initial = false) {
+  async _refresh() {
     try {
       // After midnight, "yesterday" moves on; keep showing the day picked
       // unless it's now today (which belongs in Today's transactions).
@@ -222,7 +225,11 @@ class BillsPanel extends HTMLElement {
       this._categories = c.categories;
       this._costs = costs;
       this._error = "";
-      if (initial && this._form && this._form.kind === "pay" && !this._bill(this._form.id)) {
+      // A reminder link (?pay=<id>) opened before the bills had loaded is
+      // checked now, once.
+      const first = !this._ready;
+      this._ready = true;
+      if (first && this._form && this._form.kind === "pay" && !this._bill(this._form.id)) {
         this._flash("That bill isn't active anymore.");
         this._close(false);
       }
